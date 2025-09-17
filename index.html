@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Market Snapshot Generator</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a; --form-bg-color: #2b2b2b; --text-color: #e0e0e0;
+            --border-color: #444; --accent-color: #007bff; --label-color: #aaa;
+            --header-color: #ffffff; --success-color: #28a745; --danger-color: #dc3545;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px;
+        }
+        .container { max-width: 1200px; margin: auto; }
+        h1, h2, h3 {
+            color: var(--header-color); border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px; margin-top: 30px;
+        }
+        h3 { border-bottom: none; margin-top: 20px;}
+        .form-section {
+            background-color: var(--form-bg-color); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 20px; margin-bottom: 20px;
+        }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .input-group { display: flex; flex-direction: column; }
+        label { color: var(--label-color); margin-bottom: 5px; font-size: 0.9em; }
+        input[type="text"], textarea {
+            background-color: var(--bg-color); color: var(--text-color); border: 1px solid var(--border-color);
+            border-radius: 4px; padding: 10px; font-size: 1em; width: 100%; box-sizing: border-box;
+        }
+        textarea { resize: vertical; min-height: 120px; }
+        .sub-group { border-left: 2px solid var(--accent-color); padding-left: 15px; margin-bottom: 15px; }
+        .sub-group label { font-weight: bold; color: #d0d0d0;}
+        .button-container { display: flex; gap: 10px; margin-top: 20px; }
+        button {
+            color: white; border: none; padding: 12px 20px; border-radius: 5px;
+            font-size: 1em; cursor: pointer; transition: background-color 0.2s;
+        }
+        #refresh-data-btn { background-color: var(--success-color); }
+        #refresh-data-btn:hover { background-color: #218838; }
+        #generate-summary-btn { background-color: var(--accent-color); }
+        #generate-summary-btn:hover { background-color: #0056b3; }
+        #formatted-output { background-color: #111; height: 500px; font-size: 0.9em; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Live Market Snapshot Generator</h1>
+    <p>Click <strong>Refresh Data</strong> to fetch live market information from your local server. Then click <strong>Generate Summary</strong>.</p>
+
+    <div class="form-section">
+        <h2>Controls & Output</h2>
+        <div class="button-container">
+            <button id="refresh-data-btn" type="button">Refresh All Data</button>
+            <button id="generate-summary-btn" type="button">Generate Formatted Summary</button>
+        </div>
+        <div class="input-group" style="margin-top: 20px;">
+            <h3>Formatted Output (Copy & Paste to Telegram)</h3>
+            <textarea id="formatted-output" readonly placeholder="Your formatted summary will appear here..."></textarea>
+        </div>
+    </div>
+
+    <form id="market-summary-form">
+        <div class="form-section">
+            <h2>News & Data</h2>
+            <div class="input-group"><h3>Reuters Top Stories</h3><textarea id="reuters-headlines"></textarea></div>
+            <div class="input-group"><h3>Top Data Announcements (Results from past 15 hours)</h3><textarea id="data-announcements"></textarea></div>
+        </div>
+
+        <div class="form-section">
+            <h2>Overnight Market Moves</h2>
+            <div class="grid-container">
+                <div class="input-group">
+                    <h3>Indices</h3>
+                    <div class="sub-group"><label>US Nasdaq</label><input type="text" id="nasdaq-pct"><input type="text" id="nasdaq-close"><input type="text" id="nasdaq-mover-up"><input type="text" id="nasdaq-mover-down"></div>
+                    <div class="sub-group"><label>US S&P 500</label><input type="text" id="sp500-pct"><input type="text" id="sp500-close"><input type="text" id="sp500-mover-up"><input type="text" id="sp500-mover-down"></div>
+                    <div class="sub-group"><label>US Dow Jones</label><input type="text" id="dow-pct"><input type="text" id="dow-close"><input type="text" id="dow-mover-up"><input type="text" id="dow-mover-down"></div>
+                    <div class="sub-group"><label>UK FTSE 100</label><input type="text" id="ftse-pct"><input type="text" id="ftse-close"><input type="text" id="ftse-mover-up"><input type="text" id="ftse-mover-down"></div>
+                </div>
+                <div class="input-group">
+                    <h3>Currencies</h3><input type="text" id="dxy"><input type="text" id="eurusd"><input type="text" id="audusd"><input type="text" id="usdjpy"><input type="text" id="gbpusd">
+                    <h3>Bonds</h3><input type="text" id="us10y"><input type="text" id="us2y"><input type="text" id="jpn10y"><input type="text" id="uk10y">
+                </div>
+                <div class="input-group">
+                    <h3>Other Markets ($USD)</h3><input type="text" id="btc"><input type="text" id="gold"><input type="text" id="oil"><input type="text" id="vix">
+                    <h3>ASX RBA Rate Tracker</h3><input type="text" id="rba-meeting-date"><input type="text" id="rba-no-change"><input type="text" id="rba-ease">
+                    <h3>CME FedWatch</h3><input type="text" id="fed-meeting-date"><input type="text" id="fed-no-change"><input type="text" id="fed-ease-25"><input type="text" id="fed-ease-50">
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Economic Calendar (AEST)</h2>
+            <div class="input-group"><textarea id="calendar-blurb"></textarea></div>
+            <div class="input-group"><h3>Today:</h3><textarea id="calendar-today"></textarea></div>
+            <div class="input-group"><h3>Tomorrow:</h3><textarea id="calendar-tomorrow"></textarea></div>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    const refreshBtn = document.getElementById('refresh-data-btn');
+    const generateBtn = document.getElementById('generate-summary-btn');
+    const outputArea = document.getElementById('formatted-output');
+
+    refreshBtn.addEventListener('click', async () => {
+        refreshBtn.textContent = 'Refreshing...';
+        refreshBtn.disabled = true;
+        try {
+            // This is the LIVE API call to your local server.
+            const response = await fetch('http://localhost:3000/api/market-data');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+
+            // Populate the form with the fetched data
+            document.getElementById('reuters-headlines').value = data.reutersHeadlines.join('\n\n');
+            document.getElementById('data-announcements').value = data.dataAnnouncements.join('\n');
+
+            const md = data.marketData;
+            document.getElementById('nasdaq-pct').value = `${md.nasdaq.pct.toFixed(2)}%`;
+            document.getElementById('nasdaq-close').value = md.nasdaq.close;
+            document.getElementById('nasdaq-mover-up').value = md.nasdaq.up;
+            document.getElementById('nasdaq-mover-down').value = md.nasdaq.down;
+            
+            document.getElementById('sp500-pct').value = `${md.sp500.pct.toFixed(2)}%`;
+            document.getElementById('sp500-close').value = md.sp500.close;
+            document.getElementById('sp500-mover-up').value = md.sp500.up;
+            document.getElementById('sp500-mover-down').value = md.sp500.down;
+
+            document.getElementById('dow-pct').value = `${md.dow.pct.toFixed(2)}%`;
+            document.getElementById('dow-close').value = md.dow.close;
+            document.getElementById('dow-mover-up').value = md.dow.up;
+            document.getElementById('dow-mover-down').value = md.dow.down;
+            
+            document.getElementById('ftse-pct').value = `${md.ftse.pct.toFixed(2)}%`;
+            document.getElementById('ftse-close').value = md.ftse.close;
+            document.getElementById('ftse-mover-up').value = md.ftse.up;
+            document.getElementById('ftse-mover-down').value = md.ftse.down;
+
+            document.getElementById('dxy').value = `DXY: ${md.dxy.pct > 0 ? '+' : ''}${md.dxy.pct.toFixed(2)}% , Last: ${md.dxy.close}`;
+            document.getElementById('eurusd').value = `EUR/USD: ${md.eurusd.pct > 0 ? '+' : ''}${md.eurusd.pct.toFixed(4)}% , Last: ${md.eurusd.close}`;
+            document.getElementById('audusd').value = `AUD/USD: ${md.audusd.pct > 0 ? '+' : ''}${md.audusd.pct.toFixed(4)}% , Last: ${md.audusd.close}`;
+            document.getElementById('usdjpy').value = `USD/JPY: ${md.usdjpy.pct > 0 ? '+' : ''}${md.usdjpy.pct.toFixed(2)}% , Last: ${md.usdjpy.close}`;
+            document.getElementById('gbpusd').value = `GBP/USD: ${md.gbpusd.pct > 0 ? '+' : ''}${md.gbpusd.pct.toFixed(4)}% , Last: ${md.gbpusd.close}`;
+
+            document.getElementById('us10y').value = `US 10Y: ${md.us10y.change >= 0 ? '+' : ''}${md.us10y.change.toFixed(2)} , Last: ${md.us10y.yield}`;
+            document.getElementById('us2y').value = `US 2Y: ${md.us2y.change >= 0 ? '+' : ''}${md.us2y.change.toFixed(2)} , Last: ${md.us2y.yield}`;
+            document.getElementById('jpn10y').value = `JPN 10Y: ${md.jpn10y.change >= 0 ? '+' : ''}${md.jpn10y.change.toFixed(2)} , Last: ${md.jpn10y.yield}`;
+            document.getElementById('uk10y').value = `UK 10Y: ${md.uk10y.change >= 0 ? '+' : ''}${md.uk10y.change.toFixed(2)} , Last: ${md.uk10y.yield}`;
+
+            document.getElementById('btc').value = `Bitcoin: ${md.btc.pct > 0 ? '+' : ''}${md.btc.pct.toFixed(2)}% , Last: ${md.btc.close}`;
+            document.getElementById('gold').value = `Gold: ${md.gold.pct > 0 ? '+' : ''}${md.gold.pct.toFixed(2)}% , Last ${md.gold.close}`;
+            document.getElementById('oil').value = `WTI Oil: ${md.oil.pct > 0 ? '+' : ''}${md.oil.pct.toFixed(2)}% , Last ${md.oil.close}`;
+            document.getElementById('vix').value = `VIX: ${md.vix.pct > 0 ? '+' : ''}${md.vix.pct.toFixed(2)}% , Last ${md.vix.close}`;
+            
+            const rt = data.rateTrackers;
+            document.getElementById('rba-meeting-date').value = `(Next Meeting: ${rt.rba.meetingDate})`;
+            document.getElementById('rba-no-change').value = `No Change: ${rt.rba.noChange}`;
+            document.getElementById('rba-ease').value = `25 BPS ease: ${rt.rba.ease}`;
+            document.getElementById('fed-meeting-date').value = `(Next Meeting: ${rt.cme.meetingDate})`;
+            document.getElementById('fed-no-change').value = `No Change: ${rt.cme.noChange}`;
+            document.getElementById('fed-ease-25').value = `25 BPS ease: ${rt.cme.ease25}`;
+            document.getElementById('fed-ease-50').value = `50 BPS ease: ${rt.cme.ease50}`;
+            
+            document.getElementById('calendar-blurb').value = data.economicCalendar.blurb;
+            document.getElementById('calendar-today').value = data.economicCalendar.today.join('\n');
+            document.getElementById('calendar-tomorrow').value = data.economicCalendar.tomorrow.join('\n');
+
+            alert('Live data refreshed successfully!');
+        } catch (error) {
+            alert('Error fetching live data. Make sure your local server is running. See console for details.');
+            console.error('Fetch error:', error);
+        } finally {
+            refreshBtn.textContent = 'Refresh All Data';
+            refreshBtn.disabled = false;
+        }
+    });
+
+    generateBtn.addEventListener('click', () => {
+        const getVal = (id) => document.getElementById(id).value;
+        const nl = '\n';
+        const now = new Date();
+        const time = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: true }).replace(' ', '').toLowerCase();
+        const date = `${now.getDate()} ${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`;
+        const timestamp = `(as at ${time} AEST)`;
+
+        let output = `*Overnight Market Summary: ${date} ${timestamp}*${nl}${nl}`;
+        
+        output += `*News & Data*${nl}`;
+        output += `*Reuters Top Stories*${nl}${getVal('reuters-headlines')}${nl}${nl}`;
+        output += `*Top Data Announcements*${nl}${getVal('data-announcements')}${nl}${nl}`;
+        output += `---${nl}`;
+
+        output += `*Overnight Market Moves*${nl}`;
+        output += `*Indices*${nl}`;
+        output += `*US Nasdaq:* ${getVal('nasdaq-pct')} , Last: ${getVal('nasdaq-close')}${nl}`;
+        output += `    *Up:* ${getVal('nasdaq-mover-up')}${nl}    *Down:* ${getVal('nasdaq-mover-down')}${nl}`;
+        output += `*US S&P 500:* ${getVal('sp500-pct')} , Last: ${getVal('sp500-close')}${nl}`;
+        output += `    *Up:* ${getVal('sp500-mover-up')}${nl}    *Down:* ${getVal('sp500-mover-down')}${nl}`;
+        output += `*US Dow Jones:* ${getVal('dow-pct')} , Last: ${getVal('dow-close')}${nl}`;
+        output += `    *Up:* ${getVal('dow-mover-up')}${nl}    *Down:* ${getVal('dow-mover-down')}${nl}`;
+        output += `*UK FTSE 100:* ${getVal('ftse-pct')} , Last: ${getVal('ftse-close')}${nl}`;
+        output += `    *Up:* ${getVal('ftse-mover-up')}${nl}    *Down:* ${getVal('ftse-mover-down')}${nl}${nl}`;
+
+        output += `*Currencies*${nl}${getVal('dxy')}${nl}${getVal('eurusd')}${nl}${getVal('audusd')}${nl}${getVal('usdjpy')}${nl}${getVal('gbpusd')}${nl}${nl}`;
+        output += `*Bonds*${nl}${getVal('us10y')}${nl}${getVal('us2y')}${nl}${getVal('jpn10y')}${nl}${getVal('uk10y')}${nl}${nl}`;
+        output += `*Other Markets ($USD)*${nl}${getVal('btc')}${nl}${getVal('gold')}${nl}${getVal('oil')}${nl}${getVal('vix')}${nl}${nl}`;
+
+        output += `*ASX RBA Rate Tracker ${getVal('rba-meeting-date')}*${nl}${getVal('rba-no-change')}${nl}${getVal('rba-ease')}${nl}${nl}`;
+        output += `*CME FedWatch ${getVal('fed-meeting-date')}*${nl}${getVal('fed-no-change')}${nl}${getVal('fed-ease-25')}${nl}${getVal('fed-ease-50')}${nl}${nl}`;
+        output += `---${nl}`;
+
+        output += `*Economic Calendar (AEST)*${nl}`;
+        output += `${getVal('calendar-blurb')}${nl}${nl}`;
+        output += `*Today:*${nl}${getVal('calendar-today')}${nl}${nl}`;
+        output += `*Tomorrow:*${nl}${getVal('calendar-tomorrow')}`;
+
+        outputArea.value = output;
+    });
+});
+</script>
+
+</body>
+</html>
