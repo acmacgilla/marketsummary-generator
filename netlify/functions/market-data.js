@@ -1,82 +1,135 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-// --- Live Scraper Functions ---
-// Each function is designed to fetch a specific piece of live data.
+// Access the API key from Netlify's environment variables
+const FMP_API_KEY = process.env.FMP_API_KEY;
 
-async function scrapeReutersHeadlines() {
+// --- Helper function to format percentage changes ---
+const formatPct = (num) => (num > 0 ? `+${num.toFixed(2)}%` : `${num.toFixed(2)}%`);
+
+// --- Data Fetching Functions ---
+
+// 1. News Headlines (Using your original Reuters scraper)
+async function fetchNewsHeadlines() {
     try {
         const { data } = await axios.get('https://www.reuters.com/world/', { headers: { 'User-Agent': 'Mozilla/5.0' } });
         const $ = cheerio.load(data);
         const headlines = [];
         $('a[data-testid="Heading"]').each((i, el) => {
-            if (headlines.length < 8) {
+            if (headlines.length < 5) { // Limiting to 5 for brevity
                 const title = $(el).text().trim();
-                if (title) headlines.push(title);
+                if (title) headlines.push(`- ${title}`);
             }
         });
-        return headlines.length > 0 ? headlines : ["Could not scrape Reuters headlines."];
+        return headlines.length > 0 ? headlines : ["Could not fetch Reuters headlines."];
     } catch (error) {
         console.error("Error scraping Reuters:", error.message);
         return ["Error fetching headlines."];
     }
 }
 
-async function scrapeMarketData() {
-    // This is a complex task. For a production app, dedicated APIs are best.
-    // This snapshot provides a reliable structure for the live data.
-    return {
-        "nasdaq": { "pct": -1.56, "close": "15,221.30", "up": "Moderna: +3.91%", "down": "Adobe: -4.21%" },
-        "sp500": { "pct": -0.94, "close": "4,467.44", "up": "Albemarle: +3.80%", "down": "Dollar General: -4.68%" },
-        "dow": { "pct": -0.84, "close": "34,474.83", "up": "Amgen: +1.89%", "down": "Intel: -2.99%" },
-        "ftse": { "pct": 0.50, "close": "7,527.53", "up": "Next PLC: +2.33%", "down": "Ocado Group: -3.74%" },
-        "dxy": { "pct": 0.61, "close": "105.35" }, "eurusd": { "pct": -0.75, "close": "1.0655" },
-        "audusd": { "pct": -0.88, "close": "0.6438" }, "usdjpy": { "pct": 0.25, "close": "147.45" },
-        "gbpusd": { "pct": -0.21, "close": "1.2485" }, "us10y": { "change": 0.05, "yield": "4.29%" },
-        "us2y": { "change": 0.06, "yield": "5.02%" }, "jpn10y": { "change": 0.01, "yield": "0.70%" },
-        "uk10y": { "change": 0.04, "yield": "4.38%" }, "btc": { "pct": 1.20, "close": "26,550" },
-        "gold": { "pct": -0.20, "close": "1,932.80" }, "oil": { "pct": 1.95, "close": "90.16" },
-        "vix": { "pct": 5.89, "close": "14.15" }
-    };
+// 2. Economic Calendar
+async function fetchEconomicCalendar() {
+    try {
+        const now = new Date();
+        const fromDate = new Date(now.getTime() - (15 * 60 * 60 * 1000)).toISOString().split('T')[0];
+        const toDate = new Date(now.getTime() + (24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+
+        const { data } = await axios.get(`https://financialmodelingprep.com/api/v3/economic_calendar?from=${fromDate}&to=${toDate}&apikey=${FMP_API_KEY}`);
+        
+        const announcements = data.filter(e => new Date(e.date) < now && e.actual != null)
+            .map(e => `${e.country} ${e.eventName}: ${e.actual} (Forecast: ${e.previous})`);
+
+        const today = data.filter(e => new Date(e.date) >= now && new Date(e.date).getDate() === now.getDate())
+            .map(e => `${new Date(e.date).toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit' })} - ${e.country} ${e.eventName}`);
+
+        const tomorrow = data.filter(e => new Date(e.date).getDate() === new Date(toDate).getDate())
+            .map(e => `${new Date(e.date).toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit' })} - ${e.country} ${e.eventName}`);
+
+        return {
+            blurb: "Live economic data sourced from API. Market focus remains on inflation and central bank commentary.",
+            announcements: announcements.slice(0, 5), // Get the last 5 announcements
+            today: today.length > 0 ? today : ["No major events scheduled for the rest of today."],
+            tomorrow: tomorrow.length > 0 ? tomorrow : ["No major events scheduled for tomorrow."]
+        };
+    } catch (error) {
+        console.error("Error fetching Economic Calendar:", error.message);
+        return { blurb: "Error fetching calendar data.", announcements: [], today: [], tomorrow: [] };
+    }
 }
 
-async function scrapeEconomicCalendar() {
-    // Similarly, a snapshot is used for stability. Live calendar scraping is complex.
-    return {
-        "blurb": "After a volatile session driven by US inflation data and the ECB's rate decision, the market looks ahead to US consumer sentiment data. The University of Michigan's preliminary report for September will offer a key insight into household economic expectations.",
-        "today": [ "22:30, US Import Price Index (MoM, Aug)", "23:15, US Industrial Production (MoM, Aug)", "23:59, UoM Consumer Sentiment (Sep, Prelim)" ],
-        "tomorrow": [ "N/A - Quiet session expected." ],
-        "announcements": [
-            "US CPI (YoY, Aug): 3.7% vs consensus 3.6%",
-            "US Core CPI (YoY, Aug): 4.3% vs consensus 4.3%",
-            "ECB Interest Rate Decision: 4.50% (Hike) vs consensus 4.50%",
-        ]
-    };
+
+// 3, 4, 5, 6. Indices, FX, Bonds, and Other Markets
+async function fetchMarketData() {
+    try {
+        const tickers = "NDAQ,^GSPC,^DJI,^FTSE,BTCUSD,EURUSD,AUDUSD,USDJPY,GBPUSD,GCUSD,CLUSD,^VIX";
+        const { data: marketData } = await axios.get(`https://financialmodelingprep.com/api/v3/quote/${tickers}?apikey=${FMP_API_KEY}`);
+        const dataMap = marketData.reduce((map, item) => (map[item.symbol] = item, map), {});
+        
+        // Scrape bond yields from Yahoo Finance
+        const { data: bondsHtml } = await axios.get('https://finance.yahoo.com/world-indices/', { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const $ = cheerio.load(bondsHtml);
+        const us10y = $('fin-streamer[data-symbol="^TNX"]').text();
+        const us2y = $('fin-streamer[data-symbol="^IRX"]').text(); // Using 13 week as proxy for 2Y
+
+        return {
+            nasdaq: { pct: formatPct(dataMap.NDAQ.changesPercentage), close: dataMap.NDAQ.price.toLocaleString(), up: "N/A", down: "N/A" },
+            sp500: { pct: formatPct(dataMap['^GSPC'].changesPercentage), close: dataMap['^GSPC'].price.toLocaleString(), up: "N/A", down: "N/A" },
+            dow: { pct: formatPct(dataMap['^DJI'].changesPercentage), close: dataMap['^DJI'].price.toLocaleString(), up: "N/A", down: "N/A" },
+            ftse: { pct: formatPct(dataMap['^FTSE'].changesPercentage), close: dataMap['^FTSE'].price.toLocaleString(), up: "N/A", down: "N/A" },
+            dxy: { pct: 0.00, close: "N/A" }, // DXY not available on free plan, placeholder
+            eurusd: { pct: formatPct(dataMap.EURUSD.changesPercentage), close: dataMap.EURUSD.price.toFixed(4) },
+            audusd: { pct: formatPct(dataMap.AUDUSD.changesPercentage), close: dataMap.AUDUSD.price.toFixed(4) },
+            usdjpy: { pct: formatPct(dataMap.USDJPY.changesPercentage), close: dataMap.USDJPY.price.toFixed(2) },
+            gbpusd: { pct: formatPct(dataMap.GBPUSD.changesPercentage), close: dataMap.GBPUSD.price.toFixed(4) },
+            us10y: { yield: `${((us10y / 10)).toFixed(2)}%`, change: 0.00 }, // Yahoo provides price, not yield % directly
+            us2y: { yield: `${((us2y / 10)).toFixed(2)}%`, change: 0.00 },
+            jpn10y: { yield: "0.95%", change: 0.00 }, // Placeholder
+            uk10y: { yield: "4.06%", change: 0.00 }, // Placeholder
+            btc: { pct: formatPct(dataMap.BTCUSD.changesPercentage), close: dataMap.BTCUSD.price.toLocaleString() },
+            gold: { pct: formatPct(dataMap.GCUSD.changesPercentage), close: dataMap.GCUSD.price.toLocaleString() },
+            oil: { pct: formatPct(dataMap.CLUSD.changesPercentage), close: dataMap.CLUSD.price.toLocaleString() },
+            vix: { pct: formatPct(dataMap['^VIX'].changesPercentage), close: dataMap['^VIX'].price.toFixed(2) },
+        };
+    } catch (error) {
+         console.error("Error fetching Market Data:", error.message);
+         return { error: "Failed to fetch market data" };
+    }
 }
 
+// 7. Rate Trackers (Scraping)
 async function scrapeRateTrackers() {
-    return {
-        "rba": { "meetingDate": "3 Oct 2025", "noChange": "88%", "ease": "12%" },
-        "cme": { "meetingDate": "1 Nov 2025", "noChange": "97%", "ease25": "3%", "ease50": "0%" }
-    };
-}
+    try {
+        // CME FedWatch Tool
+        const { data: cmeHtml } = await axios.get('https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html', { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const $cme = cheerio.load(cmeHtml);
+        const cmeProbabilities = $cme('#fedwatch-tool-table-1 tbody tr td:nth-child(3)').map((i, el) => $(el).text().trim()).get();
+        
+        // ASX RBA Rate Tracker
+        const { data: asxHtml } = await axios.get('https://www.asx.com.au/data/trt/ib_expectation_curve.json');
 
+        return {
+            cme: { meetingDate: "1 Nov 2025", noChange: `${cmeProbabilities[0] || 'N/A'}`, ease25: `${cmeProbabilities[1] || 'N/A'}`, ease50: "0%" },
+            rba: { meetingDate: asxHtml[0]?.meeting_date_display, noChange: `${(asxHtml[0]?.p_no_change*100).toFixed(0)}%` || 'N/A', ease: `${(asxHtml[0]?.p_decrease_25*100).toFixed(0)}%` || 'N/A' }
+        };
+    } catch (error) {
+        console.error("Error scraping Rate Trackers:", error.message);
+        return { cme: { noChange: 'Error' }, rba: { noChange: 'Error' } };
+    }
+}
 
 // --- Main Handler ---
-// This is the function Netlify runs. It calls all the scraper functions.
 exports.handler = async function(event, context) {
-    console.log("Function invoked to fetch LIVE data...");
     try {
-        // Run all scraping tasks in parallel for speed
         const [
             reutersHeadlines,
             marketData,
             calendarData,
             rateTrackers
         ] = await Promise.all([
-            scrapeReutersHeadlines(),
-            scrapeMarketData(),
-            scrapeEconomicCalendar(),
+            fetchNewsHeadlines(),
+            fetchMarketData(),
+            fetchEconomicCalendar(),
             scrapeRateTrackers()
         ]);
 
