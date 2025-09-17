@@ -1,0 +1,4 @@
+[functions]
+  directory = "netlify/functions"
+[functions."market-data"]
+  timeout = 20 # Timeout in seconds
