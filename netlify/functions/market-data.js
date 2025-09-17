@@ -9,21 +9,17 @@ const formatPct = (num) => (num > 0 ? `+${num.toFixed(2)}%` : `${num.toFixed(2)}
 
 // --- Data Fetching Functions ---
 
-// 1. News Headlines (Using your original Reuters scraper)
+// 1. News Headlines (Using a reliable News API)
 async function fetchNewsHeadlines() {
+    // Access the second API key from Netlify's environment variables
+    const NEWS_API_KEY = process.env.NEWS_API_KEY;
     try {
-        const { data } = await axios.get('https://www.reuters.com/world/', { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const $ = cheerio.load(data);
-        const headlines = [];
-        $('a[data-testid="Heading"]').each((i, el) => {
-            if (headlines.length < 5) { // Limiting to 5 for brevity
-                const title = $(el).text().trim();
-                if (title) headlines.push(`- ${title}`);
-            }
-        });
-        return headlines.length > 0 ? headlines : ["Could not fetch Reuters headlines."];
+        const url = `https://newsapi.org/v2/top-headlines?category=business&language=en&apiKey=${NEWS_API_KEY}`;
+        const { data } = await axios.get(url);
+        const headlines = data.articles.slice(0, 5).map(article => `- ${article.title}`);
+        return headlines.length > 0 ? headlines : ["Could not fetch news headlines."];
     } catch (error) {
-        console.error("Error scraping Reuters:", error.message);
+        console.error("Error fetching News API:", error.message);
         return ["Error fetching headlines."];
     }
 }
