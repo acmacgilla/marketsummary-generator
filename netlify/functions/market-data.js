@@ -2,42 +2,64 @@ const axios = require('axios');
 
 const FMP_API_KEY = process.env.FMP_API_KEY;
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
+const WORLD_NEWS_API_KEY = process.env.WORLD_NEWS_API_KEY; // New key
 
 const formatPct = (num) => (num > 0 ? `+${num.toFixed(2)}%` : `${num.toFixed(2)}%`);
 
-// 1. News Headlines with 4-hour filter
+// 1. News Headlines - Reworked to use multiple sources
 async function fetchNewsHeadlines() {
-    try {
-        const url = `https://newsapi.org/v2/top-headlines?category=business&apiKey=${NEWS_API_KEY}`;
-        const { data } = await axios.get(url);
-        
-        // Filter for articles in the last 4 hours
-        const fourHoursAgo = new Date(Date.now() - (4 * 60 * 60 * 1000));
-        const recentArticles = data.articles.filter(article => new Date(article.publishedAt) > fourHoursAgo);
+    // We will call both APIs and combine the results for reliability.
+    const worldNewsPromise = axios.get(`https://api.worldnewsapi.com/top-news?source-country=us&language=en`, {
+        headers: { 'x-api-key': WORLD_NEWS_API_KEY }
+    });
+    const newsApiPromise = axios.get(`https://newsapi.org/v2/top-headlines?category=business&apiKey=${NEWS_API_KEY}`);
 
-        if (recentArticles.length === 0) return ["- No major business headlines in the last 4 hours."];
-        return recentArticles.slice(0, 5).map(article => `- ${article.title}`);
+    // Promise.allSettled ensures that even if one API fails, the other can still succeed.
+    const results = await Promise.allSettled([worldNewsPromise, newsApiPromise]);
 
-    } catch (error) {
-        console.error("Error fetching News API:", error.response ? error.response.data : error.message);
-        return ["Error fetching news headlines."];
+    let headlines = [];
+
+    // Process World News API results (if successful)
+    if (results[0].status === 'fulfilled' && results[0].value.data.top_news) {
+        const worldNews = results[0].value.data.top_news
+            .slice(0, 5) // Take top 5 clusters
+            .map(cluster => `- ${cluster.news[0].title}`); // Take the first article from each cluster
+        headlines.push(...worldNews);
+    } else {
+        console.error("World News API failed:", results[0].reason?.response?.data || "Unknown Error");
     }
+
+    // Process NewsAPI results (if successful)
+    if (results[1].status === 'fulfilled' && results[1].value.data.articles) {
+        const newsApiArticles = results[1].value.data.articles
+            .slice(0, 5)
+            .map(article => `- ${article.title}`);
+        headlines.push(...newsApiArticles);
+    } else {
+        console.error("NewsAPI failed:", results[1].reason?.response?.data || "Unknown Error");
+    }
+
+    if (headlines.length === 0) {
+        return ["- Could not fetch headlines from any source."];
+    }
+    
+    // Remove duplicate headlines and return the top 7 unique results
+    const uniqueHeadlines = [...new Set(headlines)];
+    return uniqueHeadlines.slice(0, 7);
 }
 
-// 2. Market Data with robust error handling
+
+// 2. Market Data (This function is correct and remains the same)
 async function fetchMarketData() {
     try {
-        const tickers = "^GSPC,^DJI,NDAQ,^FTSE,^VIX,EURUSD,GBPUSD,USDJPY,AUDUSD,USDCHF,BTCUSD,ETHUSD,GCUSD,CLUSD"; // Using NDAQ and CLUSD for better compatibility
+        const tickers = "^GSPC,^DJI,NDAQ,^FTSE,^VIX,EURUSD,GBPUSD,USDJPY,AUDUSD,USDCHF,BTCUSD,ETHUSD,GCUSD,CLUSD";
         const url = `https://financialmodelingprep.com/stable/quote/${tickers}?apikey=${FMP_API_KEY}`;
         const { data } = await axios.get(url);
         
-        if (!data || data.length === 0) {
-            throw new Error("API returned an empty array for market data.");
-        }
+        if (!data || data.length === 0) throw new Error("API returned an empty array for market data.");
         
         const dataMap = data.reduce((map, item) => (map[item.symbol] = item, map), {});
         
-        // Helper to safely get data or return 'N/A'
         const get = (symbol, field, toLocale = false) => {
             if (dataMap[symbol] && dataMap[symbol][field] !== undefined) {
                 const value = dataMap[symbol][field];
