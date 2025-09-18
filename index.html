@@ -8,44 +8,32 @@
         :root {
             --bg-color: #1a1a1a; --form-bg-color: #2b2b2b; --text-color: #e0e0e0;
             --border-color: #444; --accent-color: #007bff; --label-color: #aaa;
-            --header-color: #ffffff;
+            --header-color: #ffffff; --success-color: #28a745;
         }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
         .container { max-width: 1200px; margin: auto; }
-        h1, h2 {
-            color: var(--header-color); border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px; margin-top: 30px;
-        }
-        .form-section {
-            background-color: var(--form-bg-color); border: 1px solid var(--border-color);
-            border-radius: 8px; padding: 20px; margin-bottom: 20px;
-        }
+        h1, h2 { color: var(--header-color); border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-top: 30px; }
+        .form-section { background-color: var(--form-bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
         .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .input-group { display: flex; flex-direction: column; }
         label { color: var(--label-color); margin-bottom: 10px; font-size: 1.1em; font-weight: bold; }
-        textarea {
-            background-color: var(--bg-color); color: var(--text-color); border: 1px solid var(--border-color);
-            border-radius: 4px; padding: 10px; font-size: 1em; width: 100%; box-sizing: border-box;
-            resize: vertical; min-height: 250px;
-        }
-        button {
-            color: white; border: none; padding: 12px 20px; border-radius: 5px;
-            font-size: 1em; cursor: pointer; transition: background-color: 0.2s;
-            background-color: var(--accent-color);
-        }
-        button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #555; cursor: not-allowed;}
+        textarea { background-color: var(--bg-color); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; font-size: 1em; width: 100%; box-sizing: border-box; resize: vertical; min-height: 250px; }
+        .button-container { display: flex; gap: 10px; }
+        button { color: white; border: none; padding: 12px 20px; border-radius: 5px; font-size: 1em; cursor: pointer; transition: background-color: 0.2s; }
+        #refresh-data-btn { background-color: var(--accent-color); }
+        #generate-summary-btn { background-color: var(--success-color); }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        #summary-output { min-height: 400px; white-space: pre-wrap; }
     </style>
 </head>
 <body>
-
 <div class="container">
     <h1>Live Market Snapshot Generator</h1>
     <div class="form-section">
-        <button id="refresh-data-btn" type="button">Refresh Live Data</button>
+        <div class="button-container">
+            <button id="refresh-data-btn" type="button">1. Refresh Live Data</button>
+            <button id="generate-summary-btn" type="button">2. Generate Summary</button>
+        </div>
     </div>
 
     <div class="form-section">
@@ -56,7 +44,7 @@
                 <textarea id="market-data" readonly></textarea>
             </div>
             <div class="input-group">
-                <label for="news-headlines">Top Business Headlines</label>
+                <label for="news-headlines">Top Business Headlines (Last 4 Hours)</label>
                 <textarea id="news-headlines" readonly></textarea>
             </div>
         </div>
@@ -64,47 +52,67 @@
 
     <div class="form-section">
         <h2>Economic Calendar</h2>
-        <iframe src="https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&importance=2,3&countries=25,6,37,72,17,14,35,43,36,11,12,5&calType=week&timeZone=31&lang=70" width="650" height="467" frameborder="0" allowtransparency="true" marginwidth="0" marginheight="0"></iframe><div class="poweredBy" style="font-family: Arial, Helvetica, sans-serif;"><span style="font-size: 11px;color: #333333;text-decoration: none;">Real Time Economic Calendar provided by <a href="https://au.Investing.com/" rel="nofollow" target="_blank" style="font-size: 11px;color: #06529D; font-weight: bold;" class="underline_link">Investing.com Australia</a>.</span></div>
+        <iframe src="https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&importance=2,3&countries=25,6,37,72,17,14,35,43,36,11,12,5&calType=week&timeZone=31&lang=70" width="650" height="467" frameborder="0" allowtransparency="true" marginwidth="0" marginheight="0"></iframe>
+    </div>
+
+    <div class="form-section">
+        <h2>Formatted Summary (Copy & Paste)</h2>
+        <textarea id="summary-output" placeholder="Click 'Generate Summary' to compile the report here."></textarea>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const refreshBtn = document.getElementById('refresh-data-btn');
+    const generateBtn = document.getElementById('generate-summary-btn');
     const marketText = document.getElementById('market-data');
     const newsText = document.getElementById('news-headlines');
+    const summaryOutput = document.getElementById('summary-output');
 
     const refreshData = async () => {
         refreshBtn.textContent = 'Refreshing...';
         refreshBtn.disabled = true;
+        generateBtn.disabled = true;
         marketText.value = "Fetching...";
         newsText.value = "Fetching...";
-
         try {
             const response = await fetch('/.netlify/functions/market-data');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
-
             marketText.value = data.marketData.join('\n');
             newsText.value = data.newsHeadlines.join('\n');
-
         } catch (error) {
-            alert('Error fetching live data. Check the browser console and Netlify function logs for details.');
+            alert('Error fetching live data. Check function logs for details.');
             console.error('Fetch error:', error);
             marketText.value = "An error occurred.";
             newsText.value = "An error occurred.";
         } finally {
-            refreshBtn.textContent = 'Refresh Live Data';
+            refreshBtn.textContent = '1. Refresh Live Data';
             refreshBtn.disabled = false;
+            generateBtn.disabled = false;
         }
     };
 
+    const generateSummary = () => {
+        const now = new Date();
+        const time = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Australia/Sydney' }).replace(' ', '').toLowerCase();
+        const date = `${now.getDate()} ${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`;
+        const timestamp = `(as at ${time} AEST)`;
+        const nl = '\n';
+        const separator = `${nl}---${nl}${nl}`;
+
+        let output = `*Market Summary: ${date} ${timestamp}*${nl}${nl}`;
+        output += `*Top Headlines (Last 4 Hours)*${nl}${newsText.value}${separator}`;
+        output += `${marketText.value}${separator}`;
+        output += `*Economic Calendar*${nl}(Manually copy key events from the calendar above)`;
+        
+        summaryOutput.value = output;
+    };
+
     refreshBtn.addEventListener('click', refreshData);
-    refreshData(); // Fetch data on page load
+    generateBtn.addEventListener('click', generateSummary);
+    refreshData();
 });
 </script>
-
 </body>
 </html>
