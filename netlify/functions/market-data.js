@@ -30,29 +30,40 @@ async function fetchNewsHeadlines() {
         return ["- Could not fetch headlines from any source."];
     }
     const uniqueHeadlines = [...new Set(headlines)];
-    return uniqueHeadlines.slice(0, 8);
+    return uniqueHeadlines.slice(0, 7);
 }
 
-// 2. Market Data (Reworked to use separate API calls for each category)
+// 2. Market Data (Reworked to make one API call per symbol)
 async function fetchMarketData() {
     try {
-        const indexTickers = "^GSPC,^DJI,^IXIC,^FTSE,^VIX";
-        const fxTickers = "EURUSD,GBPUSD,USDJPY,AUDUSD,USDCHF";
-        const cryptoTickers = "BTCUSD,ETHUSD";
-        const commodityTickers = "GCUSD,BZUSD";
+        const symbols = [
+            // Indices
+            "^GSPC", "^DJI", "^IXIC", "^FTSE", "^VIX",
+            // Currencies
+            "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF",
+            // Crypto
+            "BTCUSD", "ETHUSD",
+            // Commodities
+            "GCUSD", "BZUSD"
+        ];
 
-        // Use Promise.all to run all category fetches concurrently
-        const [indexRes, fxRes, cryptoRes, commodityRes] = await Promise.all([
-            axios.get(`https://financialmodelingprep.com/stable/quote/${indexTickers}?apikey=${FMP_API_KEY}`),
-            axios.get(`https://financialmodelingprep.com/stable/quote/${fxTickers}?apikey=${FMP_API_KEY}`),
-            axios.get(`https://financialmodelingprep.com/stable/quote/${cryptoTickers}?apikey=${FMP_API_KEY}`),
-            axios.get(`https://financialmodelingprep.com/stable/quote/${commodityTickers}?apikey=${FMP_API_KEY}`)
-        ]);
+        // Create an array of promises, one for each symbol request
+        const promises = symbols.map(symbol =>
+            axios.get(`https://financialmodelingprep.com/stable/quote/${symbol}?apikey=${FMP_API_KEY}`)
+        );
+
+        // Execute all requests concurrently
+        const responses = await Promise.all(promises);
+
+        // Process all responses into a single data map
+        const dataMap = {};
+        responses.forEach(response => {
+            const data = response.data[0]; // The API returns an array with one item
+            if (data && data.symbol) {
+                dataMap[data.symbol] = data;
+            }
+        });
         
-        // Combine all results into a single map for easy lookup
-        const allData = [...indexRes.data, ...fxRes.data, ...cryptoRes.data, ...commodityRes.data];
-        const dataMap = allData.reduce((map, item) => (map[item.symbol] = item, map), {});
-
         const get = (symbol, field, toLocale = false) => {
             if (dataMap[symbol] && dataMap[symbol][field] !== undefined) {
                 const value = dataMap[symbol][field];
@@ -87,11 +98,10 @@ async function fetchMarketData() {
         return output;
     } catch (error) {
          console.error("Error fetching Market Data:", error.message);
-         // Check if it's a 404 error specifically
-         if (error.response && error.response.status === 404) {
-             return ["Error fetching market data: A 404 Not Found error occurred. Please check the API endpoint path in the code."];
+         if (error.response) {
+            console.error("Error Details:", error.response.data);
          }
-         return ["Error fetching market data. Please check API key and ticker symbols."];
+         return ["Error fetching market data. Please check the function logs and API key."];
     }
 }
 
