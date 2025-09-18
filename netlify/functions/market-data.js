@@ -33,33 +33,37 @@ async function fetchNewsHeadlines() {
     return uniqueHeadlines.slice(0, 7);
 }
 
-// 2. Market Data (Reworked to make one API call per symbol)
+// 2. Market Data (Reworked to use a unique request for every symbol)
 async function fetchMarketData() {
     try {
-        const symbols = [
-            // Indices
-            "^GSPC", "^DJI", "^IXIC", "^FTSE", "^VIX",
-            // Currencies
-            "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF",
-            // Crypto
-            "BTCUSD", "ETHUSD",
-            // Commodities
-            "GCUSD", "BZUSD"
-        ];
+        // --- Create a separate, unique request for every single symbol ---
+        const gspcPromise = axios.get(`https://financialmodelingprep.com/stable/quote/^GSPC?apikey=${FMP_API_KEY}`);
+        const djiPromise = axios.get(`https://financialmodelingprep.com/stable/quote/^DJI?apikey=${FMP_API_KEY}`);
+        const ixicPromise = axios.get(`https://financialmodelingprep.com/stable/quote/^IXIC?apikey=${FMP_API_KEY}`);
+        const ftsePromise = axios.get(`https://financialmodelingprep.com/stable/quote/^FTSE?apikey=${FMP_API_KEY}`);
+        const vixPromise = axios.get(`https://financialmodelingprep.com/stable/quote/^VIX?apikey=${FMP_API_KEY}`);
+        const eurusdPromise = axios.get(`https://financialmodelingprep.com/stable/quote/EURUSD?apikey=${FMP_API_KEY}`);
+        const gbpusdPromise = axios.get(`https://financialmodelingprep.com/stable/quote/GBPUSD?apikey=${FMP_API_KEY}`);
+        const usdjpyPromise = axios.get(`https://financialmodelingprep.com/stable/quote/USDJPY?apikey=${FMP_API_KEY}`);
+        const audusdPromise = axios.get(`https://financialmodelingprep.com/stable/quote/AUDUSD?apikey=${FMP_API_KEY}`);
+        const usdchfPromise = axios.get(`https://financialmodelingprep.com/stable/quote/USDCHF?apikey=${FMP_API_KEY}`);
+        const btcusdPromise = axios.get(`https://financialmodelingprep.com/stable/quote/BTCUSD?apikey=${FMP_API_KEY}`);
+        const ethusdPromise = axios.get(`https://financialmodelingprep.com/stable/quote/ETHUSD?apikey=${FMP_API_KEY}`);
+        const gcusdPromise = axios.get(`https://financialmodelingprep.com/stable/quote/GCUSD?apikey=${FMP_API_KEY}`);
+        const bzusdPromise = axios.get(`https://financialmodelingprep.com/stable/quote/BZUSD?apikey=${FMP_API_KEY}`);
+        
+        // Use Promise.allSettled to ensure that one failed request does not stop the others
+        const results = await Promise.allSettled([
+            gspcPromise, djiPromise, ixicPromise, ftsePromise, vixPromise,
+            eurusdPromise, gbpusdPromise, usdjpyPromise, audusdPromise, usdchfPromise,
+            btcusdPromise, ethusdPromise, gcusdPromise, bzusdPromise
+        ]);
 
-        // Create an array of promises, one for each symbol request
-        const promises = symbols.map(symbol =>
-            axios.get(`https://financialmodelingprep.com/stable/quote/${symbol}?apikey=${FMP_API_KEY}`)
-        );
-
-        // Execute all requests concurrently
-        const responses = await Promise.all(promises);
-
-        // Process all responses into a single data map
+        // Process all successful results into a single data map
         const dataMap = {};
-        responses.forEach(response => {
-            const data = response.data[0]; // The API returns an array with one item
-            if (data && data.symbol) {
+        results.forEach(result => {
+            if (result.status === 'fulfilled' && result.value.data && result.value.data.length > 0) {
+                const data = result.value.data[0];
                 dataMap[data.symbol] = data;
             }
         });
