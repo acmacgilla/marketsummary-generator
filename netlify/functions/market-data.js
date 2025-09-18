@@ -4,7 +4,11 @@ const FMP_API_KEY = process.env.FMP_API_KEY;
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 const WORLD_NEWS_API_KEY = process.env.WORLD_NEWS_API_KEY;
 
-const formatPct = (num) => (num > 0 ? `+${num.toFixed(2)}%` : `${num.toFixed(2)}%`);
+// Updated formatPct to be safer: it now checks if the input is a number.
+const formatPct = (num) => {
+    if (typeof num !== 'number') return 'N/A';
+    return (num > 0 ? `+${num.toFixed(2)}%` : `${num.toFixed(2)}%`);
+};
 
 // 1. News Headlines (This function is correct and remains the same)
 async function fetchNewsHeadlines() {
@@ -33,10 +37,9 @@ async function fetchNewsHeadlines() {
     return uniqueHeadlines.slice(0, 7);
 }
 
-// 2. Market Data (Reworked to use a unique request for every symbol)
+// 2. Market Data (Updated with safer data formatting)
 async function fetchMarketData() {
     try {
-        // --- Create a separate, unique request for every single symbol ---
         const gspcPromise = axios.get(`https://financialmodelingprep.com/stable/quote/^GSPC?apikey=${FMP_API_KEY}`);
         const djiPromise = axios.get(`https://financialmodelingprep.com/stable/quote/^DJI?apikey=${FMP_API_KEY}`);
         const ixicPromise = axios.get(`https://financialmodelingprep.com/stable/quote/^IXIC?apikey=${FMP_API_KEY}`);
@@ -52,14 +55,12 @@ async function fetchMarketData() {
         const gcusdPromise = axios.get(`https://financialmodelingprep.com/stable/quote/GCUSD?apikey=${FMP_API_KEY}`);
         const bzusdPromise = axios.get(`https://financialmodelingprep.com/stable/quote/BZUSD?apikey=${FMP_API_KEY}`);
         
-        // Use Promise.allSettled to ensure that one failed request does not stop the others
         const results = await Promise.allSettled([
             gspcPromise, djiPromise, ixicPromise, ftsePromise, vixPromise,
             eurusdPromise, gbpusdPromise, usdjpyPromise, audusdPromise, usdchfPromise,
             btcusdPromise, ethusdPromise, gcusdPromise, bzusdPromise
         ]);
 
-        // Process all successful results into a single data map
         const dataMap = {};
         results.forEach(result => {
             if (result.status === 'fulfilled' && result.value.data && result.value.data.length > 0) {
@@ -75,6 +76,9 @@ async function fetchMarketData() {
             }
             return 'N/A';
         };
+        
+        // Helper to safely format numbers with toFixed()
+        const formatFixed = (value, places) => (typeof value === 'number' ? value.toFixed(places) : 'N/A');
 
         const output = [];
         output.push("*Indices*");
@@ -82,15 +86,15 @@ async function fetchMarketData() {
         output.push(`- ${get('^DJI', 'name')}: ${formatPct(get('^DJI', 'changePercentage'))}, Last: ${get('^DJI', 'price', true)}`);
         output.push(`- ${get('^IXIC', 'name')}: ${formatPct(get('^IXIC', 'changePercentage'))}, Last: ${get('^IXIC', 'price', true)}`);
         output.push(`- ${get('^FTSE', 'name')}: ${formatPct(get('^FTSE', 'changePercentage'))}, Last: ${get('^FTSE', 'price', true)}`);
-        output.push(`- ${get('^VIX', 'name')}: ${formatPct(get('^VIX', 'changePercentage'))}, Last: ${get('^VIX', 'price').toFixed(2)}`);
+        output.push(`- ${get('^VIX', 'name')}: ${formatPct(get('^VIX', 'changePercentage'))}, Last: ${formatFixed(get('^VIX', 'price'), 2)}`);
         output.push("");
 
         output.push("*Currencies*");
-        output.push(`- ${get('EURUSD', 'name')}: ${formatPct(get('EURUSD', 'changePercentage'))}, Last: ${get('EURUSD', 'price').toFixed(4)}`);
-        output.push(`- ${get('GBPUSD', 'name')}: ${formatPct(get('GBPUSD', 'changePercentage'))}, Last: ${get('GBPUSD', 'price').toFixed(4)}`);
-        output.push(`- ${get('USDJPY', 'name')}: ${formatPct(get('USDJPY', 'changePercentage'))}, Last: ${get('USDJPY', 'price').toFixed(2)}`);
-        output.push(`- ${get('AUDUSD', 'name')}: ${formatPct(get('AUDUSD', 'changePercentage'))}, Last: ${get('AUDUSD', 'price').toFixed(4)}`);
-        output.push(`- ${get('USDCHF', 'name')}: ${formatPct(get('USDCHF', 'changePercentage'))}, Last: ${get('USDCHF', 'price').toFixed(4)}`);
+        output.push(`- ${get('EURUSD', 'name')}: ${formatPct(get('EURUSD', 'changePercentage'))}, Last: ${formatFixed(get('EURUSD', 'price'), 4)}`);
+        output.push(`- ${get('GBPUSD', 'name')}: ${formatPct(get('GBPUSD', 'changePercentage'))}, Last: ${formatFixed(get('GBPUSD', 'price'), 4)}`);
+        output.push(`- ${get('USDJPY', 'name')}: ${formatPct(get('USDJPY', 'changePercentage'))}, Last: ${formatFixed(get('USDJPY', 'price'), 2)}`);
+        output.push(`- ${get('AUDUSD', 'name')}: ${formatPct(get('AUDUSD', 'changePercentage'))}, Last: ${formatFixed(get('AUDUSD', 'price'), 4)}`);
+        output.push(`- ${get('USDCHF', 'name')}: ${formatPct(get('USDCHF', 'changePercentage'))}, Last: ${formatFixed(get('USDCHF', 'price'), 4)}`);
         output.push("");
         
         output.push("*Crypto & Commodities*");
@@ -102,9 +106,7 @@ async function fetchMarketData() {
         return output;
     } catch (error) {
          console.error("Error fetching Market Data:", error.message);
-         if (error.response) {
-            console.error("Error Details:", error.response.data);
-         }
+         if (error.response) { console.error("Error Details:", error.response.data); }
          return ["Error fetching market data. Please check the function logs and API key."];
     }
 }
